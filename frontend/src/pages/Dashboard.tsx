@@ -169,9 +169,9 @@ const ProcessUsageWall: React.FC<{
               >
                 {g.live ? (
                   <>
-                    <div style={numStyle(m.pct)}>{m.pct}%</div>
+                    <div style={numStyle(m.pct)}>{m.key === 'cpu' ? `${m.pct}%` : (m.detail || '—')}</div>
                     {/* Always reserve the sub-line so CPU and Mem baselines align. */}
-                    <div style={detailStyle}>{m.detail || '\u00A0'}</div>
+                    <div style={detailStyle}>{m.key === 'cpu' ? '\u00A0' : (m.pct > 0 ? `${m.pct}% RAM` : '\u00A0')}</div>
                   </>
                 ) : (
                   <>
