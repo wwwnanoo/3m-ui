@@ -155,17 +155,44 @@ jobs:
           PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
           LATEST: ${{ needs.metadata.outputs.latest }}
         run: |
-          cat > release-notes.md <<'NOTES'
-          Complete Linux installation bundles are provided for amd64 and arm64.
-          Each bundle includes the panel, its pinned Mihomo core and lifecycle scripts.
-          Other architectures are standalone panel builds for advanced installations.
-          Verify downloads against SHA256SUMS. SHA256SUMS.pem and SHA256SUMS.sig
-          provide Sigstore keyless verification for this release workflow.
-          Docker images are published to ghcr.io/<owner>/<repository>:<tag>.
-          The latest image and default installer follow stable releases only.
-          NOTES
+          # Build release notes: GitHub auto-generated changelog (from commits
+          # since last tag) + a footer with install/verify instructions.
+          PREV_TAG=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" > release-notes.md
+            echo "" >> release-notes.md
+            git log "$PREV_TAG..HEAD" --pretty=format:"- %s (%h)" --no-merges >> release-notes.md
+            echo "" >> release-notes.md
+            echo "" >> release-notes.md
+          else
+            echo "## Changes" > release-notes.md
+            echo "" >> release-notes.md
+            git log --pretty=format:"- %s (%h)" --no-merges -30 >> release-notes.md
+            echo "" >> release-notes.md
+            echo "" >> release-notes.md
+          fi
+          echo "---" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Install" >> release-notes.md
+          echo "" >> release-notes.md
+          echo '```bash' >> release-notes.md
+          echo "curl -fsSL https://raw.githubusercontent.com/\${REPOSITORY}/main/scripts/install.sh | sh" >> release-notes.md
+          echo '```' >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Verify (optional)" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "Download SHA256SUMS + SHA256SUMS.sig + SHA256SUMS.pem, then:" >> release-notes.md
+          echo '```bash' >> release-notes.md
+          echo "cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig SHA256SUMS" >> release-notes.md
+          echo '```' >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Docker" >> release-notes.md
+          echo "" >> release-notes.md
+          echo '```bash' >> release-notes.md
+          echo "docker pull ghcr.io/\${REPOSITORY,,}:\$TAG" >> release-notes.md
+          echo '```' >> release-notes.md
           gh release create "$TAG" --verify-tag --draft --title "$TAG" \
-            --notes-file release-notes.md --generate-notes
+            --notes-file release-notes.md
           gh release upload "$TAG" release-files/*
           gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST"
 
