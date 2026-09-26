@@ -36,23 +36,19 @@ func clampPercent(v float64) float64 {
 	return math.Round(v*10) / 10
 }
 
-// sampleCPU returns overall CPU busy percent. Caches the previous sample so
-// rapid dashboard polls (every few seconds) still produce a stable reading;
-// a zero-interval call returns the last known value.
+// sampleCPU returns overall CPU busy percent using non-blocking delta
+// sampling. The first call returns 0 (no previous baseline); subsequent
+// calls compute the delta between /proc/stat snapshots.
+//
+// Previously used cpu.Percent(200ms) which blocked 200ms on every poll.
+// With 1s dashboard polling this added 20% CPU overhead just for
+// measurement, inflating the reading on single-core VPS.
 func sampleCPU() float64 {
 	cpuMu.Lock()
 	defer cpuMu.Unlock()
 
-	// Prefer a short blocking sample — reliable on Linux hosts/VPS.
-	percents, err := cpu.Percent(200*time.Millisecond, false)
-	if err == nil && len(percents) > 0 {
-		v := clampPercent(percents[0])
-		cpuLast = percents
-		cpuLastTime = time.Now()
-		return v
-	}
-	// Fallback: non-blocking times-based sample after first call.
-	percents, err = cpu.Percent(0, false)
+	// Non-blocking: computes delta since last call.
+	percents, err := cpu.Percent(0, false)
 	if err == nil && len(percents) > 0 {
 		v := clampPercent(percents[0])
 		cpuLast = percents

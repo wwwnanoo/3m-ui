@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
@@ -42,6 +43,12 @@ func SampleProcessUsage(pid int) ProcessUsage {
 	}
 	// Non-blocking percent since last sample for this PID.
 	if pct, err := p.CPUPercent(); err == nil {
+		// gopsutil returns CPU% as fraction of ALL cores (e.g. on a 4-core
+		// host, 100% = 4 cores fully busy). Normalize to per-core so the
+		// display matches operator expectation (100% = 1 core fully busy).
+		if n, err := cpu.Counts(true); err == nil && n > 0 {
+			pct = pct / float64(n)
+		}
 		v := clampPercent(pct)
 		procCPUMu.Lock()
 		procCPULast[int32(pid)] = struct {
