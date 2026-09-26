@@ -133,14 +133,26 @@ func sampleSystemStats() *SystemStats {
 
 	var memoryInfo MemoryInfo
 	if vMem, err := mem.VirtualMemory(); err == nil && vMem != nil {
-		// Prefer explicit used/total; UsedPercent on Linux already accounts for
-		// buffers/cache the way operators usually expect.
-		percent := vMem.UsedPercent
+		// Use Total - Available as "used" so the number is consistent with
+		// process PSS values. gopsutil's vMem.Used subtracts Buffers + Cached
+		// (page cache), which makes it look like processes use more memory
+		// than the system total — confusing operators.
+		//
+		// Total - Available = memory that is NOT readily reclaimable
+		// (process RSS/PSS + kernel + slab + non-reclaimable cache).
+		// This matches what `free -h` shows in the "used" column on
+		// modern Linux (where "buff/cache" is separate).
+		used := float64(vMem.Total - vMem.Available)
+		if vMem.Available == 0 {
+			// Fallback for kernels without MemAvailable (very old).
+			used = float64(vMem.Used)
+		}
+		percent := float64(0)
 		if vMem.Total > 0 {
-			percent = float64(vMem.Used) / float64(vMem.Total) * 100
+			percent = used / float64(vMem.Total) * 100
 		}
 		memoryInfo = MemoryInfo{
-			Used:    float64(vMem.Used),
+			Used:    used,
 			Total:   float64(vMem.Total),
 			Percent: clampPercent(percent),
 		}
